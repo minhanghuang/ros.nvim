@@ -1,6 +1,8 @@
 import os
+import re
 import glob
 import json
+import shutil
 from base import param
 from base import Util
 
@@ -24,7 +26,7 @@ class Clangd:
         if not self._ok:
             return None
         if "compile_commands" == param.get_type():
-            self.generate_compile_commands()
+            self.generate_compile_commands2()
         return None
 
     def generate_compile_commands(self) -> None:
@@ -37,22 +39,60 @@ class Clangd:
             recursive=True
         )
 
-        # 读取所有文件中的JSON数据
-        all_json_data = []
-        for file in compile_commands_files:
-            with open(file, 'r') as f:
-                data = json.load(f)
-                all_json_data.extend(data)
+        packages = {}
+        pattern = r'build/(\w+)/compile_commands.json'
+        for compile_commands_file in compile_commands_files:
+            match = re.search(pattern, compile_commands_file)
+            if match:
+                packages[match.group(1)] = compile_commands_file
 
-        for package_name in self._util.get_build_package_list():
-            package_path = self._util.get_package_path(package_name)
-            if None is package_path:
+        for name, package in self._util.get_build_package_list().items():
+            if None is package.path or name not in packages:
                 continue
-            print(package_path)
-            if None is not package_path and os.path.exists(package_path):
-                # 将所有数据写入到单个compile_commands.json文件中
-                with open(os.path.join(package_path, 'compile_commands.json'), 'w+') as f:
-                    json.dump(all_json_data, f)
+            shutil.copyfile(
+                packages[name],
+                os.path.join(
+                    package.path,
+                    "compile_commands.json"))
+
+        return None
+
+    def generate_compile_commands2(self) -> None:
+        if not self._util.is_work_space() or self._util.has_compile_commands_file():
+            return None
+
+        packages = self._util.get_build_package_list()
+        for name, package in packages.items():
+            if not package.software or None is package.compile_commands_path:
+                continue
+            # is software package
+            for depend_name in package.depend_package:
+                if depend_name in packages.keys():
+                    depend_package = self._util.get_package(depend_name)
+                    if None is not depend_package and depend_package.software:
+                        self._util.generate_compile_commands(name, depend_name)
+
+        compile_commands_files = glob.glob(
+            self._ws_path +
+            '/build/**/compile_commands.json',
+            recursive=True
+        )
+
+        packages = {}
+        pattern = r'build/(\w+)/compile_commands.json'
+        for compile_commands_file in compile_commands_files:
+            match = re.search(pattern, compile_commands_file)
+            if match:
+                packages[match.group(1)] = compile_commands_file
+
+        for name, package in self._util.get_build_package_list().items():
+            if None is package.path or name not in packages:
+                continue
+            shutil.copyfile(
+                packages[name],
+                os.path.join(
+                    package.path,
+                    "compile_commands.json"))
 
         return None
 

@@ -6,7 +6,8 @@ local function generate_compile_commands()
   -- 当前文件绝对路径
   local curr_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h")
 
-  vim.fn.system('python3 ' .. curr_dir .. "/clangd.py " .. "-t " .. "compile_commands " .. "-ws " .. work_dir)
+  local o = vim.fn.system('python3 ' .. curr_dir .. "/clangd.py " .. "-t " .. "compile_commands " .. "-ws " .. work_dir)
+  print(o)
 end
 
 function M.setup(config)
