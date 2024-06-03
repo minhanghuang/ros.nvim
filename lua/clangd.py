@@ -1,14 +1,12 @@
 import os
 import re
 import glob
-import json
 import shutil
 from base import param
 from base import Util
 
 
 class Clangd:
-
     def __init__(self) -> None:
         self._ws_path = param.get_work_space_dir()
         self._util: Util = None
@@ -34,13 +32,11 @@ class Clangd:
             return None
 
         compile_commands_files = glob.glob(
-            self._ws_path +
-            '/build/**/compile_commands.json',
-            recursive=True
+            self._ws_path + "/build/**/compile_commands.json", recursive=True
         )
 
         packages = {}
-        pattern = r'build/(\w+)/compile_commands.json'
+        pattern = r"build/(\w+)/compile_commands.json"
         for compile_commands_file in compile_commands_files:
             match = re.search(pattern, compile_commands_file)
             if match:
@@ -50,10 +46,8 @@ class Clangd:
             if None is package.path or name not in packages:
                 continue
             shutil.copyfile(
-                packages[name],
-                os.path.join(
-                    package.path,
-                    "compile_commands.json"))
+                packages[name], os.path.join(package.path, "compile_commands.json")
+            )
 
         return None
 
@@ -73,13 +67,11 @@ class Clangd:
                         self._util.generate_compile_commands(name, depend_name)
 
         compile_commands_files = glob.glob(
-            self._ws_path +
-            '/build/**/compile_commands.json',
-            recursive=True
+            self._ws_path + "/build/**/compile_commands.json", recursive=True
         )
 
         packages = {}
-        pattern = r'build/(\w+)/compile_commands.json'
+        pattern = r"build/(\w+)/compile_commands.json"
         for compile_commands_file in compile_commands_files:
             match = re.search(pattern, compile_commands_file)
             if match:
@@ -88,11 +80,13 @@ class Clangd:
         for name, package in self._util.get_build_package_list().items():
             if None is package.path or name not in packages:
                 continue
-            shutil.copyfile(
-                packages[name],
-                os.path.join(
-                    package.path,
-                    "compile_commands.json"))
+            target_file = os.path.join(package.path, "compile_commands.json")
+            if os.path.exists(target_file):
+                continue
+            os.symlink(packages[name], target_file)
+            # shutil.copyfile(
+            #     packages[name], os.path.join(package.path, "compile_commands.json")
+            # )
 
         return None
 
