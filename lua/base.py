@@ -155,6 +155,10 @@ class Util:
                     self._work_space.built_by = BuildTool.CATKINMAKE
                 elif "catkin build" == file_content:
                     self._work_space.built_by = BuildTool.CATKINTOOLS
+                elif "colcon" == file_content:
+                    self._work_space.built_by = BuildTool.COLCON
+                else:
+                    raise
         else:
             self._work_space.built_by = BuildTool.CMAKE
 
@@ -163,6 +167,8 @@ class Util:
             self._parse_catkinmake_package()
         elif BuildTool.CATKINTOOLS == self._work_space.built_by:
             self._parse_catkintool_package()
+        elif BuildTool.COLCON == self._work_space.built_by:
+            self._parse_colcon_package()
         else:
             pass
 
@@ -260,6 +266,7 @@ class Util:
         return {}
 
     def _parse_catkintool_package(self) -> Dict[str, Package]:
+        # 1. 解析路径
         catkin_config_path = self._path_join(
             self._work_space.build_space, ".catkin_tools.yaml"
         )
@@ -277,6 +284,7 @@ class Util:
                     elif "source_space" == key.strip():
                         self._work_space.source_space = value.strip()
 
+        # 2. 获取被选中的package
         packages_path = self._path_join(
             self._work_space.path, ".catkin_tools/profiles/default/packages/"
         )
@@ -295,6 +303,62 @@ class Util:
                     self._work_space.packages[name] = package
 
         return {}
+
+    def _parse_colcon_package(self) -> Dict[str, Package]:
+        # 1. 获取被选中的package
+        packages_path = self._work_space.build_space
+        if not self._path_exists(packages_path):
+            raise
+        pacakges_folder = os.listdir(packages_path)
+        for name in pacakges_folder:
+            if self._path_is_dir(self._path_join(packages_path, name)):
+                package = Package()
+                package.enable = True
+                package.name = name
+                if name not in self._work_space.packages.keys():
+                    self._work_space.packages[name] = package
+
+        # 2. 解析路径
+        if len(self._work_space.packages) == 0:
+            raise
+
+        for name, package in self._work_space.packages.items():
+            colcon_config_path = self._path_join(
+                self._work_space.build_space, (name + "/CMakeCache.txt")
+            )
+            if not self._path_exists(colcon_config_path):
+                raise
+            self._work_space.source_space = self.extract_source_dirs_from_colcon(
+                colcon_config_path
+            )
+            self._work_space.install_space = self.extract_install_dirs_from_colcon(
+                colcon_config_path
+            )
+
+        return {}
+
+    def extract_source_dirs_from_colcon(self, file_path: str) -> str:
+        with open(file_path, "r") as file:
+            content = file.read()
+        pattern = re.compile(r"(\w+)_SOURCE_DIR:STATIC=(.+)")
+        matches = pattern.findall(content)
+        source_dirs = {os.path.dirname(match[1]) for match in matches}
+        if len(source_dirs) == 1:
+            return source_dirs.pop()
+        else:
+            raise ValueError("source_dir path")
+
+    def extract_install_dirs_from_colcon(self, file_path: str) -> str:
+        with open(file_path, "r") as file:
+            content = file.read()
+        pattern = re.compile(r"CMAKE_INSTALL_PREFIX:PATH=(.+)")
+        match = pattern.search(content)
+        if match:
+            full_path = match.group(1)
+            parent_path = os.path.dirname(full_path)
+            return parent_path
+        else:
+            raise ValueError("CMAKE_INSTALL_PREFIX not found in the file")
 
     def _is_software_package(self, path: str) -> bool:
         for root, dirs, files in os.walk(path):
@@ -352,13 +416,6 @@ class Util:
             print("  depend package: {}".format(package.depend_package))
             print("---")
         return None
-
-    def get_ws_build_tool(self) -> BuildTool:
-        """
-        获取工作区编译工具
-        :return:
-        """
-        return self._work_space.built_by
 
     def is_work_space(self) -> bool:
         """
