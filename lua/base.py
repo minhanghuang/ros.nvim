@@ -343,10 +343,10 @@ class Util:
         pattern = re.compile(r"(\w+)_SOURCE_DIR:STATIC=(.+)")
         matches = pattern.findall(content)
         source_dirs = {os.path.dirname(match[1]) for match in matches}
-        if len(source_dirs) == 1:
-            return source_dirs.pop()
-        else:
-            raise ValueError("source_dir path")
+        for dir in source_dirs:
+            if not re.match(r"^/opt/ros/[^/]+/src$", dir):
+                return dir
+        raise ValueError("source_dir path")
 
     def extract_install_dirs_from_colcon(self, file_path: str) -> str:
         with open(file_path, "r") as file:
