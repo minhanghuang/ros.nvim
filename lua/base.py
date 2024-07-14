@@ -480,17 +480,42 @@ class Util:
         for context in data:
             if isinstance(context, dict) and "command" in context.keys():
                 command = context["command"]
-                dros_package_name = 'DROS_PACKAGE_NAME=\\"{}\\"'.format(
-                    package_target.name
-                )
                 insert_string = " -I{} ".format(self.get_package_include_path(depend))
                 if insert_string in command:
                     continue
-                insert_index = command.find(dros_package_name) + len(dros_package_name)
-                modified_string = (
-                    command[:insert_index] + insert_string + command[insert_index:]
-                )
-                context["command"] = modified_string
+
+                modified_command = command
+
+                if "-D" in command and "-I" in command:
+                    # 匹配最后一个 -D 和第一个 -I 之间的部分
+                    pattern = r"(.*-D)(.*?)(\s-I.*)"
+                    replacement = r"\1\2 " + insert_string + r" \3"
+                    modified_command = re.sub(
+                        pattern, replacement, command, 1, re.DOTALL
+                    )
+                elif "-I" in command:
+                    # 在第一个 -I 之前插入
+                    pattern = r"(.*?)(\s-I.*)"
+                    replacement = r"\1 " + insert_string + r" \2"
+                    modified_command = re.sub(
+                        pattern, replacement, command, 1, re.DOTALL
+                    )
+                elif "-D" in command:
+                    # 在最后一个 -D 之后插入
+                    pattern = r"(.*-D)(.*)"
+                    replacement = r"\1 " + insert_string + r" \2"
+                    modified_command = re.sub(
+                        pattern, replacement, command, 1, re.DOTALL
+                    )
+                else:
+                    # 既没有-D也没有-I
+                    parts = command.split(" ", 1)
+                    if len(parts) > 1:
+                        modified_command = (
+                            parts[0] + " " + insert_string + " " + parts[1]
+                        )
+
+                context["command"] = modified_command
 
         with open(package_target.compile_commands_path, "w") as f:
             json.dump(data, f)
